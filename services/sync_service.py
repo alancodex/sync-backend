@@ -10,15 +10,19 @@ from datetime import datetime, timezone, timedelta
 MINUTOS_SINCRONIZANDO = 15 
 
 QUERY_ALL_STORES = """
-    SELECT
-        id, idEmpresa, nomeFantasia, tempo, grupoLoja,
-        dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
-    FROM sincronizacao
-    ORDER BY grupoLoja, dataInicio DESC
+    SELECT s.id, s.idEmpresa, s.nomeFantasia, s.tempo, s.grupoLoja,
+           s.dataInicio, s.dataFim, s.dataStart, s.dataErro,
+           s.versaoFL, s.descricao, s.tipo
+    FROM sincronizacao s
+    INNER JOIN (
+        SELECT grupoLoja, MAX(dataInicio) AS ultima
+        FROM sincronizacao
+        GROUP BY grupoLoja
+    ) t ON s.grupoLoja = t.grupoLoja AND s.dataInicio = t.ultima
 """
 
 QUERY_STORE_DETAIL = """
-    SELECT
+    SELECT TOP 100
         id, idEmpresa, nomeFantasia, tempo, grupoLoja,
         dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
     FROM sincronizacao
@@ -60,30 +64,32 @@ def _classify_status(records: list[dict]) -> str:
         return "erro"
 
     tipo = (latest.get("tipo") or "").lower()
+
     if "erro" in tipo:
         return "erro"
 
-    # Pega o dataInicio do registro mais recente
-    data_inicio = latest.get("dataInicio")
-    if data_inicio is None:
-        return "desconhecido"
+    # Qualquer evento de sincronização ativo = verde
+    if "enviando" in tipo or "recebendo" in tipo or "fim" in tipo or "inicio" in tipo:
+        return "ok"
 
-    # Converte para datetime se vier como string
+    # open = amarelo (estado indefinido)
+    if "open" in tipo:
+        return "sincronizando"
+
+    # Fallback por tempo
+    data_inicio = latest.get("dataInicio")
     if isinstance(data_inicio, str):
         try:
             data_inicio = datetime.strptime(data_inicio[:19], "%Y-%m-%d %H:%M:%S")
         except ValueError:
             return "desconhecido"
 
-    agora = datetime.now()
-    diferenca = agora - data_inicio
+    if data_inicio:
+        if datetime.now() - data_inicio <= timedelta(minutes=30):
+            return "ok"
+        return "desconhecido"
 
-    # Se o último evento foi há menos de 15 minutos → ainda sincronizando
-    if diferenca <= timedelta(minutes=MINUTOS_SINCRONIZANDO):
-        return "sincronizando"
-
-    # Último evento foi há mais de 15 minutos → sincronização concluída
-    return "ok"
+    return "desconhecido"
 
 
 def _build_store_summary(grupo_loja: str, records: list[dict]) -> dict:
@@ -106,7 +112,6 @@ def _build_store_summary(grupo_loja: str, records: list[dict]) -> dict:
         "versao":             latest.get("versaoFL", ""),
         "tipo":               latest.get("tipo", ""),
         "ultima_atualizacao": ultima_atualizacao,
-        "total_registros":    len(records),
     }
 
 

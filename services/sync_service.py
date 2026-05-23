@@ -20,11 +20,8 @@ GRUPOS_KEYWORDS = {
     "Lojão Conforto": ["CONFORTO"],
 }
 
+
 def _detectar_grupo(nome_fantasia: str) -> str:
-    """
-    Retorna o nome do grupo com base nas palavras-chave.
-    Se não encontrar, retorna o próprio nomeFantasia como grupo individual.
-    """
     if not nome_fantasia:
         return "Outros"
     nome_upper = nome_fantasia.upper()
@@ -32,7 +29,7 @@ def _detectar_grupo(nome_fantasia: str) -> str:
         for kw in keywords:
             if kw.upper() in nome_upper:
                 return grupo
-    return nome_fantasia  # card individual
+    return nome_fantasia
 
 
 QUERY_ALL_STORES = """
@@ -41,10 +38,11 @@ QUERY_ALL_STORES = """
            s.versaoFL, s.descricao, s.tipo
     FROM sincronizacao s
     INNER JOIN (
-        SELECT grupoLoja, MAX(dataInicio) AS ultima
+        SELECT nomeFantasia, MAX(dataInicio) AS ultima
         FROM sincronizacao
-        GROUP BY grupoLoja
-    ) t ON s.grupoLoja = t.grupoLoja AND s.dataInicio = t.ultima
+        WHERE nomeFantasia IS NOT NULL AND nomeFantasia <> ''
+        GROUP BY nomeFantasia
+    ) t ON s.nomeFantasia = t.nomeFantasia AND s.dataInicio = t.ultima
 """
 
 QUERY_ALL_LOJAS = """
@@ -52,24 +50,6 @@ QUERY_ALL_LOJAS = """
     FROM sincronizacao
     WHERE nomeFantasia IS NOT NULL AND nomeFantasia <> ''
     ORDER BY nomeFantasia
-"""
-
-QUERY_STORE_DETAIL = """
-    SELECT TOP 100
-        id, idEmpresa, nomeFantasia, tempo, grupoLoja,
-        dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
-    FROM sincronizacao
-    WHERE nomeFantasia LIKE ?
-    ORDER BY dataInicio DESC
-"""
-
-QUERY_DETAIL_BY_GRUPO = """
-    SELECT TOP 200
-        id, idEmpresa, nomeFantasia, tempo, grupoLoja,
-        dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
-    FROM sincronizacao
-    WHERE {where_clause}
-    ORDER BY dataInicio DESC
 """
 
 QUERY_SUMMARY_STATS = """
@@ -133,10 +113,6 @@ def _build_group_summary(grupo: str, records: list[dict], lojas: list[str]) -> d
     if not records:
         return {}
 
-    # Status do grupo = pior status entre as lojas
-    # Se qualquer uma tiver erro → erro
-    # Se qualquer uma estiver sincronizando → sincronizando
-    # Senão → ok
     statuses = [_classify_status([r]) for r in records]
     if "erro" in statuses:
         status = "erro"
@@ -147,7 +123,6 @@ def _build_group_summary(grupo: str, records: list[dict], lojas: list[str]) -> d
     else:
         status = "desconhecido"
 
-    # Registro mais recente do grupo
     latest = max(records, key=lambda r: r.get("dataInicio") or "")
 
     timestamps = [latest.get("dataFim"), latest.get("dataStart"), latest.get("dataInicio")]
@@ -170,12 +145,10 @@ def get_all_stores_status() -> list[dict]:
     try:
         cursor = conn.cursor()
 
-        # Último registro de cada grupoLoja
         cursor.execute(QUERY_ALL_STORES)
         rows = cursor.fetchall()
         latest_records = [_row_to_dict(cursor, r) for r in rows]
 
-        # Todos os nomeFantasia distintos
         cursor.execute(QUERY_ALL_LOJAS)
         rows2 = cursor.fetchall()
         cols2 = [col[0] for col in cursor.description]
@@ -183,40 +156,32 @@ def get_all_stores_status() -> list[dict]:
     finally:
         conn.close()
 
-    # Agrupa registros mais recentes por grupo de palavras-chave
     grupos_records: dict[str, list[dict]] = {}
     for rec in latest_records:
         nome = rec.get("nomeFantasia") or ""
         grupo = _detectar_grupo(nome)
         grupos_records.setdefault(grupo, []).append(rec)
 
-    # Agrupa todos os nomeFantasia por grupo de palavras-chave
     grupos_lojas: dict[str, set] = {}
     for l in all_lojas:
         nome = l.get("nomeFantasia") or ""
         grupo = _detectar_grupo(nome)
         grupos_lojas.setdefault(grupo, set()).add(nome)
 
-    # Monta resumo por grupo
     result = []
     for grupo, records in grupos_records.items():
         lojas = list(grupos_lojas.get(grupo, set()))
         result.append(_build_group_summary(grupo, records, lojas))
 
-    # Ordena por nome do grupo
     result.sort(key=lambda x: x["grupo_loja"])
     return result
 
 
 def get_store_detail(grupo: str) -> dict:
-    """
-    Busca detalhes de um grupo — retorna registros de todas as lojas do grupo.
-    """
     conn = get_connection()
     try:
         cursor = conn.cursor()
 
-        # Descobre quais nomeFantasia pertencem a esse grupo
         cursor.execute(QUERY_ALL_LOJAS)
         rows = cursor.fetchall()
         cols = [col[0] for col in cursor.description]
@@ -230,7 +195,6 @@ def get_store_detail(grupo: str) -> dict:
         if not lojas_do_grupo:
             return {"grupo_loja": grupo, "registros": [], "status": "desconhecido", "lojas": []}
 
-        # Busca registros de todas as lojas do grupo
         placeholders = ", ".join(["?" for _ in lojas_do_grupo])
         query = f"""
             SELECT TOP 200
@@ -298,7 +262,6 @@ def get_chart_data(grupo: str | None = None) -> list[dict]:
         cursor = conn.cursor()
 
         if grupo:
-            # Busca lojas do grupo
             cursor.execute(QUERY_ALL_LOJAS)
             rows = cursor.fetchall()
             cols = [col[0] for col in cursor.description]

@@ -6,9 +6,8 @@ GRUPOS_KEYWORDS = {
     "Graciosa":       ["GRACIOSA"],
     "To Rica":        ["TO RICA"],
     "Pupilentes":     ["PUPILENTES"],
-    "PPL F":          ["PPL", "PAPALEGUAS"],
-    "Destak F":       ["DESTAK F", "DESTAKF"],
-    "Destak Cell":    ["DESTAK CELL", "DESTAK C"],
+    "Papaleguas":     ["PPL", "PAPALEGUAS"],
+    "Destak Cell":    ["DESTAK CELL", "DESTAK C", "DESTAK", "DESTAK F", "DESTAKF"],
     "Empório HD":     ["EMPORIO"],
     "Sementeira":     ["SEMENT"],
     "Sigillo":        ["SIGILL"],
@@ -18,6 +17,7 @@ GRUPOS_KEYWORDS = {
     "Cimento Mello":  ["MELO", "CIMENTO"],
     "La Donna":       ["DONNA"],
     "Lojão Conforto": ["CONFORTO"],
+    "Central": ["CENTRAL"]
 }
 
 
@@ -113,7 +113,13 @@ def _build_group_summary(grupo: str, records: list[dict], lojas: list[str]) -> d
     if not records:
         return {}
 
-    statuses = [_classify_status([r]) for r in records]
+    # Status individual por loja
+    lojas_status = {}
+    for rec in records:
+        nome = rec.get("nomeFantasia") or ""
+        lojas_status[nome] = _classify_status([rec])
+
+    statuses = list(lojas_status.values())
     if "erro" in statuses:
         status = "erro"
     elif "sincronizando" in statuses:
@@ -124,14 +130,21 @@ def _build_group_summary(grupo: str, records: list[dict], lojas: list[str]) -> d
         status = "desconhecido"
 
     latest = max(records, key=lambda r: r.get("dataInicio") or "")
-
     timestamps = [latest.get("dataFim"), latest.get("dataStart"), latest.get("dataInicio")]
     ultima_atualizacao = next((_fmt_dt(t) for t in timestamps if t), None)
+
+    # Monta lista de lojas com status individual
+    lojas_detalhadas = []
+    for nome in sorted(lojas):
+        lojas_detalhadas.append({
+            "nome":   nome,
+            "status": lojas_status.get(nome, "desconhecido"),
+        })
 
     return {
         "grupo_loja":         grupo,
         "nome_fantasia":      grupo,
-        "lojas":              sorted(lojas),
+        "lojas":              lojas_detalhadas,
         "status":             status,
         "mensagem":           latest.get("tipo", ""),
         "erro":               _fmt_dt(latest.get("dataErro")),

@@ -17,7 +17,7 @@ GRUPOS_KEYWORDS = {
     "Cimento Mello":  ["MELO", "CIMENTO"],
     "La Donna":       ["DONNA"],
     "Lojão Conforto": ["CONFORTO"],
-    "Central": ["CENTRAL"]
+    "Central": ["CENTRAL", "CENTRAL F", "CENTRALF"]
 }
 
 

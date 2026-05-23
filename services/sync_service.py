@@ -10,14 +10,21 @@ GRUPOS_KEYWORDS = {
     "Destak Cell":    ["DESTAK CELL", "DESTAK C", "DESTAK", "DESTAK F", "DESTAKF"],
     "Empório HD":     ["EMPORIO"],
     "Sementeira":     ["SEMENT"],
-    "Sigillo":        ["SIGILL"],
+    "Sigillo":        ["SIGILL", "SIGILO JAQUEIRA"],
     "Vibe Praia":     ["VIBE"],
     "Recyclo":        ["RECYCLO"],
     "Bombas":         ["BOMBAS"],
     "Cimento Mello":  ["MELO", "CIMENTO"],
     "La Donna":       ["DONNA"],
     "Lojão Conforto": ["CONFORTO"],
-    "Central": ["CENTRAL", "CENTRAL F", "CENTRALF"]
+    "Central": ["CENTRAL", "CENTRAL F", "CENTRALF"],
+    "V+ VIRTUAL": ["V+ VIRTUAL BREJO", "V+ VIRTUAL CAJAZEIRAS", "V+ VIRTUAL POMBAL", "V+ BREJO", "V+ POMBAL"],
+    "Sementeira": ["SEMETEIRA SANTAMELIA FILIAL", "SEMETEIRA SANTAMELIA MATRIZ"],
+    "Rossini": ["Oticas Rossini Centro", "Oticas Rossini Espinheiro", "Oticas Rossini shop Tacaruna"],
+    "Oticas Economica": ["OTICAS ECONOMICA BARREIROS", "OTICAS ECONOMICA IPSEP", "OTICAS ECONOMICA PALMARES"],
+    "Credicardo": ["CREDCARDO FILIAL 1", "CREDCARDO FILIAL 2", "CREDCARDO MATRIZ"],
+    "CIAO": ["CIAO - RECIFE", "CIAO OUTLET LOJA"],
+    "AUTOMAQ": ["AUTOMAQ AUTOMACAO INDUSTRIAL", "AUTOMAQ MARANHAO"],
 }
 
 

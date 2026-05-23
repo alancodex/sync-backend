@@ -95,17 +95,21 @@ def _classify_status(records: list[dict]) -> str:
         return "erro"
 
     if "enviando" in tipo or "recebendo" in tipo or "fim" in tipo or "inicio" in tipo:
-        # Verifica se o evento é recente (últimas 2 horas)
         data_inicio = latest.get("dataInicio")
+
+        # Converte string para datetime se necessário
         if isinstance(data_inicio, str):
             try:
                 data_inicio = datetime.strptime(data_inicio[:19], "%Y-%m-%d %H:%M:%S")
             except ValueError:
-                return "desconhecido"
-        if data_inicio:
+                return "ok"  # se não conseguir parsear, assume ok
+
+        # Compara datetime com datetime
+        if isinstance(data_inicio, datetime):
             diferenca = datetime.now() - data_inicio
-            if diferenca.total_seconds() > 7200:  # mais de 2 horas sem atualizar
+            if diferenca.total_seconds() > 7200:
                 return "desconhecido"
+
         return "ok"
 
     if "open" in tipo:

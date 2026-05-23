@@ -97,18 +97,14 @@ def _classify_status(records: list[dict]) -> str:
     if "enviando" in tipo or "recebendo" in tipo or "fim" in tipo or "inicio" in tipo:
         data_inicio = latest.get("dataInicio")
 
-        # Converte string para datetime se necessário
-        if isinstance(data_inicio, str):
+        if data_inicio:
             try:
-                data_inicio = datetime.strptime(data_inicio[:19], "%Y-%m-%d %H:%M:%S")
+                # Agora sempre será string pois convertemos antes
+                dt = datetime.strptime(str(data_inicio)[:19], "%Y-%m-%d %H:%M:%S")
+                if (datetime.now() - dt).total_seconds() > 7200:
+                    return "desconhecido"
             except ValueError:
-                return "ok"  # se não conseguir parsear, assume ok
-
-        # Compara datetime com datetime
-        if isinstance(data_inicio, datetime):
-            diferenca = datetime.now() - data_inicio
-            if diferenca.total_seconds() > 7200:
-                return "desconhecido"
+                pass
 
         return "ok"
 
@@ -178,6 +174,11 @@ def get_all_stores_status() -> list[dict]:
     finally:
         conn.close()
 
+    # Converte todos os campos datetime para string ANTES de processar
+    for rec in latest_records:
+        for field in ("dataInicio", "dataFim", "dataStart", "dataErro"):
+            rec[field] = _fmt_dt(rec.get(field))
+
     grupos_records: dict[str, list[dict]] = {}
     for rec in latest_records:
         nome = rec.get("nomeFantasia") or ""
@@ -197,7 +198,6 @@ def get_all_stores_status() -> list[dict]:
 
     result.sort(key=lambda x: x["grupo_loja"])
     return result
-
 
 def get_store_detail(grupo: str) -> dict:
     conn = get_connection()

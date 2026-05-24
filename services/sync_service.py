@@ -102,7 +102,7 @@ def _classify_status(records: list[dict]) -> str:
                 # Adiciona 3 horas para compensar UTC-3 do banco
                 from datetime import timezone, timedelta
                 agora_brasil = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
-                if (agora_brasil - dt).total_seconds() > 600:
+                if (agora_brasil - dt).total_seconds() > 1200:
                     return "desconhecido"
             except ValueError:
                 pass

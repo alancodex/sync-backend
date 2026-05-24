@@ -95,6 +95,14 @@ def _classify_status(records: list[dict]) -> str:
         return "erro"
 
     if "enviando" in tipo or "recebendo" in tipo or "fim" in tipo or "inicio" in tipo:
+        data_inicio = latest.get("dataInicio")
+        if data_inicio:
+            try:
+                dt = datetime.strptime(str(data_inicio)[:19], "%Y-%m-%d %H:%M:%S")
+                if (datetime.now() - dt).total_seconds() > 600:  # 10 minutos
+                    return "desconhecido"
+            except ValueError:
+                pass
         return "ok"
 
     if "open" in tipo:

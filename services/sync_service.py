@@ -99,7 +99,10 @@ def _classify_status(records: list[dict]) -> str:
         if data_inicio:
             try:
                 dt = datetime.strptime(str(data_inicio)[:19], "%Y-%m-%d %H:%M:%S")
-                if (datetime.now() - dt).total_seconds() > 600:  # 10 minutos
+                # Adiciona 3 horas para compensar UTC-3 do banco
+                from datetime import timezone, timedelta
+                agora_brasil = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
+                if (agora_brasil - dt).total_seconds() > 600:
                     return "desconhecido"
             except ValueError:
                 pass

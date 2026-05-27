@@ -138,7 +138,6 @@ def get_all_stores_status() -> list[dict]:
         for field in ("dataInicio", "dataFim", "dataStart", "dataErro"):
             rec[field] = _fmt_dt(rec.get(field))
 
-    # Agrupamento estrito por grupoLoja do banco
     grupos_records: dict[str, list[dict]] = {}
     for rec in latest_records:
         grupo = rec.get("grupoLoja") or "Outros"
@@ -169,7 +168,6 @@ def get_store_detail(grupo: str) -> dict:
         cols = [col[0] for col in cursor.description]
         all_lojas = [dict(zip(cols, r)) for r in rows]
 
-        # Busca lojas pelo grupoLoja do banco
         lojas_do_grupo = [
             l["nomeFantasia"] for l in all_lojas
             if (l.get("grupoLoja") or "Outros") == grupo
@@ -180,12 +178,12 @@ def get_store_detail(grupo: str) -> dict:
 
         placeholders = ", ".join(["?" for _ in lojas_do_grupo])
         query = f"""
-            SELECT TOP 200
+            SELECT TOP 2000
                 id, idEmpresa, nomeFantasia, tempo, grupoLoja,
                 dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
             FROM sincronizacao
             WHERE nomeFantasia IN ({placeholders})
-            ORDER BY dataInicio DESC
+            ORDER BY nomeFantasia, dataInicio DESC
         """
         cursor.execute(query, lojas_do_grupo)
         rows = cursor.fetchall()

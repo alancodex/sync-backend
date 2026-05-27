@@ -176,18 +176,23 @@ def get_store_detail(grupo: str) -> dict:
         if not lojas_do_grupo:
             return {"grupo_loja": grupo, "registros": [], "status": "inativo", "lojas": []}
 
-        placeholders = ", ".join(["?" for _ in lojas_do_grupo])
-        query = f"""
-            SELECT TOP 2000
-                id, idEmpresa, nomeFantasia, tempo, grupoLoja,
-                dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
-            FROM sincronizacao
-            WHERE nomeFantasia IN ({placeholders})
-            ORDER BY nomeFantasia, dataInicio DESC
-        """
-        cursor.execute(query, lojas_do_grupo)
-        rows = cursor.fetchall()
-        records = [_row_to_dict(cursor, r) for r in rows]
+        # Busca TOP 100 por loja individualmente e junta tudo
+        records = []
+        for loja in lojas_do_grupo:
+            cursor.execute("""
+                SELECT TOP 100
+                    id, idEmpresa, nomeFantasia, tempo, grupoLoja,
+                    dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
+                FROM sincronizacao
+                WHERE nomeFantasia = ?
+                ORDER BY dataInicio DESC
+            """, (loja,))
+            rows = cursor.fetchall()
+            records += [_row_to_dict(cursor, r) for r in rows]
+
+        # Ordena tudo por data decrescente
+        records.sort(key=lambda r: r.get("dataInicio") or "", reverse=True)
+
     finally:
         conn.close()
 

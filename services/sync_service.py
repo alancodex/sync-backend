@@ -1,41 +1,5 @@
 from database.connection import get_connection
-from datetime import datetime, timedelta
-
-# ─── Mapeamento grupo → palavras-chave ───────────────────────────────────────
-GRUPOS_KEYWORDS = {
-    "Graciosa":         ["GRACIOSA"],
-    "To Rica":          ["TO RICA"],
-    "Pupilentes":       ["PUPILENTES"],
-    "Papaleguas":       ["PPL", "PAPALEGUAS"],
-    "Destak":           ["DESTAK"],
-    "Empório HD":       ["EMPORIO"],
-    "Sementeira":       ["SEMENT"],
-    "Sigillo":          ["SIGILL", "SIGILO"],
-    "Vibe Praia":       ["VIBE"],
-    "Recyclo":          ["RECYCLO"],
-    "Bombas":           ["BOMBAS"],
-    "Cimento Mello":    ["MELO", "CIMENTO"],
-    "La Donna":         ["DONNA"],
-    "Lojão Conforto":   ["CONFORTO"],
-    "Central":          ["CENTRAL"],
-    "V+ Virtual":       ["V+"],
-    "Rossini":          ["ROSSINI"],
-    "Oticas Economica": ["OTICAS ECONOMICA", "OTICA ECONOMICA"],
-    "Credcardo":        ["CREDCARDO"],
-    "CIAO":             ["CIAO"],
-    "Automaq":          ["AUTOMAQ"],
-}
-
-
-def _detectar_grupo(nome_fantasia: str) -> str:
-    if not nome_fantasia:
-        return "Outros"
-    nome_upper = nome_fantasia.upper()
-    for grupo, keywords in GRUPOS_KEYWORDS.items():
-        for kw in keywords:
-            if kw.upper() in nome_upper:
-                return grupo
-    return nome_fantasia
+from datetime import datetime, timedelta, timezone
 
 
 QUERY_ALL_STORES = """
@@ -82,7 +46,7 @@ def _fmt_dt(value) -> str | None:
 
 def _classify_status(records: list[dict]) -> str:
     if not records:
-        return "desconhecido"
+        return "inativo"
 
     latest = records[0]
 
@@ -99,11 +63,9 @@ def _classify_status(records: list[dict]) -> str:
         if data_inicio:
             try:
                 dt = datetime.strptime(str(data_inicio)[:19], "%Y-%m-%d %H:%M:%S")
-                # Adiciona 3 horas para compensar UTC-3 do banco
-                from datetime import timezone, timedelta
                 agora_brasil = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
                 if (agora_brasil - dt).total_seconds() > 1200:
-                    return "desconhecido"
+                    return "inativo"
             except ValueError:
                 pass
         return "ok"
@@ -111,14 +73,13 @@ def _classify_status(records: list[dict]) -> str:
     if "open" in tipo:
         return "sincronizando"
 
-    return "desconhecido"
+    return "inativo"
 
 
 def _build_group_summary(grupo: str, records: list[dict], lojas: list[str]) -> dict:
     if not records:
         return {}
 
-    # Status individual por loja
     lojas_status = {}
     for rec in records:
         nome = rec.get("nomeFantasia") or ""
@@ -132,18 +93,17 @@ def _build_group_summary(grupo: str, records: list[dict], lojas: list[str]) -> d
     elif "ok" in statuses:
         status = "ok"
     else:
-        status = "desconhecido"
+        status = "inativo"
 
     latest = max(records, key=lambda r: r.get("dataInicio") or "")
     timestamps = [latest.get("dataFim"), latest.get("dataStart"), latest.get("dataInicio")]
     ultima_atualizacao = next((_fmt_dt(t) for t in timestamps if t), None)
 
-    # Monta lista de lojas com status individual
     lojas_detalhadas = []
     for nome in sorted(lojas):
         lojas_detalhadas.append({
             "nome":   nome,
-            "status": lojas_status.get(nome, "desconhecido"),
+            "status": lojas_status.get(nome, "inativo"),
         })
 
     return {
@@ -174,21 +134,20 @@ def get_all_stores_status() -> list[dict]:
     finally:
         conn.close()
 
-    # Converte todos os campos datetime para string ANTES de processar
     for rec in latest_records:
         for field in ("dataInicio", "dataFim", "dataStart", "dataErro"):
             rec[field] = _fmt_dt(rec.get(field))
 
+    # Agrupamento estrito por grupoLoja do banco
     grupos_records: dict[str, list[dict]] = {}
     for rec in latest_records:
-        nome = rec.get("nomeFantasia") or ""
-        grupo = _detectar_grupo(nome)
+        grupo = rec.get("grupoLoja") or "Outros"
         grupos_records.setdefault(grupo, []).append(rec)
 
     grupos_lojas: dict[str, set] = {}
     for l in all_lojas:
-        nome = l.get("nomeFantasia") or ""
-        grupo = _detectar_grupo(nome)
+        grupo = l.get("grupoLoja") or "Outros"
+        nome  = l.get("nomeFantasia") or ""
         grupos_lojas.setdefault(grupo, set()).add(nome)
 
     result = []
@@ -198,6 +157,7 @@ def get_all_stores_status() -> list[dict]:
 
     result.sort(key=lambda x: x["grupo_loja"])
     return result
+
 
 def get_store_detail(grupo: str) -> dict:
     conn = get_connection()
@@ -209,13 +169,14 @@ def get_store_detail(grupo: str) -> dict:
         cols = [col[0] for col in cursor.description]
         all_lojas = [dict(zip(cols, r)) for r in rows]
 
+        # Busca lojas pelo grupoLoja do banco
         lojas_do_grupo = [
             l["nomeFantasia"] for l in all_lojas
-            if _detectar_grupo(l.get("nomeFantasia") or "") == grupo
+            if (l.get("grupoLoja") or "Outros") == grupo
         ]
 
         if not lojas_do_grupo:
-            return {"grupo_loja": grupo, "registros": [], "status": "desconhecido", "lojas": []}
+            return {"grupo_loja": grupo, "registros": [], "status": "inativo", "lojas": []}
 
         placeholders = ", ".join(["?" for _ in lojas_do_grupo])
         query = f"""
@@ -241,8 +202,10 @@ def get_store_detail(grupo: str) -> dict:
         status = "erro"
     elif "sincronizando" in status_records:
         status = "sincronizando"
-    else:
+    elif "ok" in status_records:
         status = "ok"
+    else:
+        status = "inativo"
 
     latest = records[0] if records else {}
     timestamps = [latest.get("dataFim"), latest.get("dataStart"), latest.get("dataInicio")]
@@ -290,7 +253,7 @@ def get_chart_data(grupo: str | None = None) -> list[dict]:
             all_lojas = [dict(zip(cols, r)) for r in rows]
             lojas_do_grupo = [
                 l["nomeFantasia"] for l in all_lojas
-                if _detectar_grupo(l.get("nomeFantasia") or "") == grupo
+                if (l.get("grupoLoja") or "Outros") == grupo
             ]
             if not lojas_do_grupo:
                 return []

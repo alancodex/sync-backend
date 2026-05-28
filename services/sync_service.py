@@ -64,7 +64,17 @@ def _classify_status(records: list[dict]) -> str:
             try:
                 dt = datetime.strptime(str(data_inicio)[:19], "%Y-%m-%d %H:%M:%S")
                 agora_brasil = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(hours=3)
-                if (agora_brasil - dt).total_seconds() > 1200:
+
+                # Pega o tempo da loja + 10 minutos de margem
+                tempo_loja = 10  # padrão caso não tenha valor
+                try:
+                    tempo_loja = int(latest.get("tempo") or 10)
+                except (ValueError, TypeError):
+                    tempo_loja = 10
+
+                tolerancia_segundos = (tempo_loja + 10) * 60
+
+                if (agora_brasil - dt).total_seconds() > tolerancia_segundos:
                     return "inativo"
             except ValueError:
                 pass

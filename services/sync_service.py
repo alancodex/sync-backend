@@ -190,7 +190,7 @@ def get_store_detail(grupo: str) -> dict:
         records = []
         for loja in lojas_do_grupo:
             cursor.execute("""
-                SELECT TOP 50
+                SELECT TOP 10
                     id, idEmpresa, nomeFantasia, tempo, grupoLoja,
                     dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
                 FROM sincronizacao

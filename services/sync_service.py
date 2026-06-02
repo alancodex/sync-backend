@@ -186,29 +186,30 @@ def get_store_detail(grupo: str) -> dict:
         if not lojas_do_grupo:
             return {"grupo_loja": grupo, "registros": [], "status": "inativo", "lojas": []}
 
-        # Busca TOP 100 por loja individualmente e junta tudo
+        # Busca TOP 20 por loja individualmente
         records = []
         for loja in lojas_do_grupo:
             cursor.execute("""
-                SELECT TOP 4
+                SELECT TOP 20
                     id, idEmpresa, nomeFantasia, tempo, grupoLoja,
                     dataInicio, dataFim, dataStart, dataErro, versaoFL, descricao, tipo
                 FROM sincronizacao
                 WHERE nomeFantasia = ?
                 ORDER BY dataInicio DESC
             """, (loja,))
-            rows = cursor.fetchall()
-            records += [_row_to_dict(cursor, r) for r in rows]
-
-        # Ordena tudo por data decrescente
-        records.sort(key=lambda r: r.get("dataInicio") or "", reverse=True)
+            loja_rows = cursor.fetchall()
+            records += [_row_to_dict(cursor, r) for r in loja_rows]
 
     finally:
         conn.close()
 
+    # Converte ANTES de ordenar
     for rec in records:
         for field in ("dataInicio", "dataFim", "dataStart", "dataErro"):
             rec[field] = _fmt_dt(rec.get(field))
+
+    # Ordena por data decrescente sem erro de tipo
+    records.sort(key=lambda r: r.get("dataInicio") or "", reverse=True)
 
     status_records = [_classify_status([r]) for r in records[:len(lojas_do_grupo)]]
     if "erro" in status_records:
